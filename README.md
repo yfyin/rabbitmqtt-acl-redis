@@ -1,7 +1,7 @@
-[TOC]
-
 # Introduction
+
 Rabbitmq support mqtt with rabbitmq-mqtt plugin, but not support topic access control and acl
+
 This project implemented a simple rabbitmqtt acl moudule with the help of eredis_pool
 
 relative modification to rabbitmq-mqtt plugin
@@ -11,10 +11,12 @@ relative modification to rabbitmq-mqtt plugin
 developed and tested base rabbitmq 3.3.6
 
 # Usege
-1. install and start redis server
-2  copy binary plugin to your rabbitmq binary path, e.g.
-``cp rabbitmqtt-acl-redis/rabbitmq_mqtt/plugins/*.ez  /usr/lib/rabbitmq/lib/rabbitmq_server-3.6.6/plugins/ ``
-3. add "redis" and "acl_cmd" section to rabbit mqtt config file,e.g.
+- install and start redis server
+- copy binary plugin to your rabbitmq binary path, e.g.
+```
+cp rabbitmqtt-acl-redis/rabbitmq_mqtt/plugins/*.ez  /usr/lib/rabbitmq/lib/rabbitmq_server-3.6.6/plugins/
+```
+- add "redis" and "acl_cmd" section to rabbit mqtt config file,e.g.
 ```erlang
  {rabbitmq_mqtt,
   [
@@ -24,8 +26,8 @@ developed and tested base rabbitmq 3.3.6
    {acl_cmd, "HGETALL mqtt_acl:~c"}
   ]},
 ```
-4. restart rabbitmq server
-5. config your acl rules to redis
+- restart rabbitmq server
+- config your acl rules to redis
 access right meaning as below
 1:subscribe
 2:publish
@@ -38,7 +40,7 @@ HSET mqtt_acl:00100001 topic3 3
 ```
 
 # How to build development env
-## Prepare [rabbitmq-public-umbrella](https://github.com/rabbitmq/rabbitmq-public-umbrella)
+## Prepare
 ```
 git clone https://github.com/rabbitmq/rabbitmq-public-umbrella
 cd rabbitmq-public-umbrella
@@ -48,8 +50,8 @@ make co
 ## Patch modification
 - replace deps/rabbitmq_mqtt with rabbitmqtt-acl-redis/rabbitmq_mqtt
  you can also refer to rabbitmqtt-acl-redis/rabbitmq_mqtt/acl_redis.diff file for detailed diff with rabbitmq_mqtt master
-- replace deps/eredus_pool with rabbitmqtt-acl-redis/eredis_pool
-there is also a diff file for you to check
+
+- replace deps/eredus_pool with rabbitmqtt-acl-redis/eredis_pool,there is also a diff file for you to check
 
 ## Build etc
 ```
