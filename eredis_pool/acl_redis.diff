@@ -1,0 +1,16 @@
+diff --git a/src/eredis_pool.app.src b/src/eredis_pool.app.src
+index 01f210a..24cb070 100644
+--- a/src/eredis_pool.app.src
++++ b/src/eredis_pool.app.src
+@@ -8,7 +8,10 @@
+                   stdlib
+                  ]},
+   {mod, { eredis_pool_app, []}},
+-  {env, []}
++  {env, [
++          {global_or_local, local},
++          {pools, []}
++        ]}
+ 
+ %% sample configuration.
+ %%

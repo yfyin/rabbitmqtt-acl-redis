@@ -1,0 +1,105 @@
+diff --git a/Makefile b/Makefile
+index 218bd34..5f6de54 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1,6 +1,6 @@
+ PROJECT = rabbitmq_mqtt
+ 
+-DEPS = ranch rabbit_common rabbit amqp_client
++DEPS = ranch rabbit_common rabbit amqp_client eredis_pool poolboy eredis
+ TEST_DEPS = emqttc ct_helper rabbitmq_ct_helpers
+ 
+ dep_ct_helper = git https://github.com/extend/ct_helper.git master
+diff --git a/include/rabbit_mqtt.hrl b/include/rabbit_mqtt.hrl
+index dbc9928..3583fd1 100644
+--- a/include/rabbit_mqtt.hrl
++++ b/include/rabbit_mqtt.hrl
+@@ -61,3 +61,5 @@
+ %% the table name
+ -record(retained_message, {topic,
+                            mqtt_msg}).
++
++-define(APP,rabbitmq_mqtt).
+diff --git a/src/rabbit_mqtt_processor.erl b/src/rabbit_mqtt_processor.erl
+index f204794..b510ca3 100644
+--- a/src/rabbit_mqtt_processor.erl
++++ b/src/rabbit_mqtt_processor.erl
+@@ -27,7 +27,7 @@
+ -include("rabbit_mqtt_frame.hrl").
+ -include("rabbit_mqtt.hrl").
+ 
+--define(APP, rabbitmq_mqtt).
++%%-define(APP, rabbitmq_mqtt).
+ -define(FRAME_TYPE(Frame, Type),
+         Frame = #mqtt_frame{ fixed = #mqtt_frame_fixed{ type = Type }}).
+ 
+@@ -676,25 +676,29 @@ close_connection(PState = #proc_state{ connection = Connection,
+ % is what happens anyway if there is an authorization failure at the AMQP level.
+ 
+ check_publish_or_die(TopicName, Fn, PState) ->
+-  case check_topic_access(TopicName, write, PState) of
++  case check_topic_access(TopicName, publish, PState) of
+     ok -> Fn();
+-    _ -> {err, unauthorized, PState}
++    %%_ -> {err, unauthorized, PState}
++    _ -> {ok, PState}
+   end.
+ 
+ check_subscribe_or_die([], Fn, _) ->
+   Fn();
+ 
+ check_subscribe_or_die([#mqtt_topic{name = TopicName} | Topics], Fn, PState) ->
+-  case check_topic_access(TopicName, read, PState) of
++  case check_topic_access(TopicName, subscribe, PState) of
+     ok -> check_subscribe_or_die(Topics, Fn, PState);
+-    _ -> {err, unauthorized, PState}
++    %%_ -> {err, unauthorized, PState}
++    _ -> {ok, PState}
+   end.
+ 
+ check_topic_access(TopicName, Access,
+                    #proc_state{
+-                      auth_state = #auth_state{user = User,
+-                                               vhost = VHost}}) ->
+-  Resource = #resource{virtual_host = VHost,
+-                       kind = topic,
+-                       name = TopicName},
+-  rabbit_access_control:check_resource_access(User, Resource, Access).
++                      client_id  = ClientId}) ->
++    case rabbit_mqtt_acl_redis:check_acl(ClientId,Access,TopicName) of
++         allow          -> ok;
++         {deny,Reason}  -> rabbit_log:debug("MQTT check_topic_access deny client ~p: ~p~n",[ClientId, Reason]),
++                           %%io:fwrite("MQTT check_topic_access deny client ~p: ~p~n",[ClientId, Reason]),
++                           reject
++    end.
++
+diff --git a/src/rabbit_mqtt_sup.erl b/src/rabbit_mqtt_sup.erl
+index 6a43cb5..c7e3a06 100644
+--- a/src/rabbit_mqtt_sup.erl
++++ b/src/rabbit_mqtt_sup.erl
+@@ -41,6 +41,9 @@ init([{Listeners, SslListeners0}]) ->
+           [{collector,
+             {rabbit_mqtt_collector, start_link, []},
+             transient, ?WORKER_WAIT, worker, [rabbit_mqtt_collector]},
++           {acl_redis,
++            {rabbit_mqtt_acl_redis, start_link, []},
++            transient, ?WORKER_WAIT, worker, [rabbit_mqtt_acl_redis]},
+            {rabbit_mqtt_retainer_sup,
+             {rabbit_mqtt_retainer_sup, start_link, [{local, rabbit_mqtt_retainer_sup}]},
+              transient, ?SUPERVISOR_WAIT, supervisor, [rabbit_mqtt_retainer_sup]} |
+diff --git a/src/rabbitmq_mqtt.app.src b/src/rabbitmq_mqtt.app.src
+index 11876ee..e049c1e 100644
+--- a/src/rabbitmq_mqtt.app.src
++++ b/src/rabbitmq_mqtt.app.src
+@@ -21,5 +21,10 @@
+          {tcp_listeners, [1883]},
+          {num_tcp_acceptors, 10},
+          {tcp_listen_options, [{backlog,   128},
+-                               {nodelay,   true}]}]},
++                               {nodelay,   true}]},
++         {redis,[{pool_size,50},
++                 {host,"127.0.0.1"},
++                 {port,6379}]},
++         {acl_cmd, "HGETALL mqtt_acl:~c"}
++        ]},
+   {applications, [kernel, stdlib, rabbit_common, rabbit, ranch, amqp_client]}]}.
